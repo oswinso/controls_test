@@ -39,15 +39,10 @@ public:
 
   struct Costs
   {
-    using Cxx_t = Eigen::Matrix<double, n, n>;
-    using Cxu_t = Eigen::Matrix<double, n, m>;
-    using Cuu_t = Eigen::Matrix<double, m, m>;
-
-    using cx_t = Eigen::Matrix<double, n, 1>;
-    using cu_t = Eigen::Matrix<double, m, 1>;
-
     C_t C;
     c_t c;
+    V_t V_final;
+    v_t v_final;
   };
 
   LQRController() noexcept = default;

@@ -28,16 +28,23 @@ void test()
   f << 0.0, g/l * (sin(angle) - angle * cos(angle)) * delta_t;
 
   LQRController::C_t C;
-  C <<  1e10, 0.0, 0.0,
-        0.0, 1e2, 0.0,
-        0.0, 0.0, 1e3;
+  C <<  1e6, 0.0, 0.0,
+        0.0, 1e1, 0.0,
+        0.0, 0.0, 1e4;
+
+  LQRController::v_t v_final;
+  v_final << 0.0, 0.0;
+
+  LQRController::V_t V_final;
+  V_final <<  1e10, 0.0,
+              0.0,  1e1;
 
   LQRController::c_t c;
   c << 0.0, 0.0, 0.0;
   // clang-format on
 
   LQRController::Dynamics dynamics{ F, f };
-  LQRController::Costs costs{ C, c };
+  LQRController::Costs costs{ C, c, V_final, v_final};
   LQRController controller(dynamics, costs);
 
   {
@@ -55,8 +62,16 @@ void test()
 
     for (int i = 0; i < timesteps; i++)
     {
+      double angle = x(0);
+      F <<  1.0,                         delta_t, 0.0,
+        g/l * cos(angle) * delta_t,  1.0,     delta_t;
+
+      f << 0.0, g/l * (sin(angle) - angle * cos(angle)) * delta_t;
+      dynamics = {F, f};
+      controller.setDynamics(dynamics);
+
       auto res = controller.solve(x, timesteps);
-      LQRController::Control_t u  = res.col(i);
+      LQRController::Control_t u  = res.col(0);
 //      u(0) = std::clamp(u(0), -max_torque, max_torque);
       x = integrate(x, u, calcDelta, delta_t);
 //      Eigen::Vector3d full{x(0), x(1), u(0)};

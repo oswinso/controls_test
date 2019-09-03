@@ -34,8 +34,8 @@ typename LQRController<n, m>::ControlArray_t LQRController<n, m>::solve(const LQ
   Eigen::Matrix<double, m, Eigen::Dynamic> Ks(m, n * num_controls);
   Eigen::Matrix<double, m, Eigen::Dynamic> ks(m, num_controls);
 
-  V_t V = getxx(costs_.C);
-  v_t v = getx(costs_.c);
+  V_t V = costs_.V_final;
+  v_t v = costs_.v_final;
   for (int i = num_controls - 1; i >= 0; i--)
   {
     Q_t Q = costs_.C + dynamics_.F.transpose() * V * dynamics_.F;
