@@ -5,9 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-W -Wall -Wextra)
 
-include_directories(include)
+set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 find_package(Eigen3 3.3 REQUIRED)
 
 set(LIBRARIES Eigen3::Eigen)
 
+add_subdirectory(src/kinematics)
 add_subdirectory(src/lqr)
+add_subdirectory(src/ilqr)

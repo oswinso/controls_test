@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pygame
 from pygame.locals import *
 from math import *
@@ -51,11 +53,15 @@ class Pendulum(pygame.sprite.Sprite):
 
         self.bob_rect.topleft = (x1 + x2, y1 + y2)
 
-        text = self.font.render(f"{self._angle()}", True, COLOR['white'])
+        text = self.font.render(f"{self._normalize(self._angle() + pi):.4E}", True, COLOR['white'])
         self.image.blit(text, (0, 0))
 
+    @staticmethod
+    def _normalize(angle):
+        return ((angle + pi) % (2 * pi)) - pi
+
     def _angle(self):
-        return self.data[self.index][1] + pi
+        return self._normalize(self.data[self.index][1] + pi)
 
     def update(self):
         # coords relative to pivot
@@ -91,7 +97,6 @@ def main():
 
     pendulum = Pendulum(pivot_vect=SCREEN_CENTER, length=300, bob_radius=25, data=data)
     group = pygame.sprite.RenderPlain((pendulum,))
-
 
     while True:
         clock.tick(60)

@@ -37,5 +37,5 @@ indent_size = 2
 indent_style = tab
 
 # cpp files
-[*.{c,h,cpp,hpp,ino,test}]
+[*.{c,h,cpp,hpp,tpp,ino,test}]
 indent_size = 2
