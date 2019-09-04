@@ -29,36 +29,37 @@ public:
   using Control_t = Eigen::Matrix<double, m, 1>;
   using Full_t = Eigen::Matrix<double, n + m, 1>;
 
-  using ControlArray_t = Eigen::Matrix<double, m, Eigen::Dynamic>;
-  using StateArray_t = Eigen::Matrix<double, n, Eigen::Dynamic>;
-
-  using FArray_t = Eigen::Matrix<double, n, Eigen::Dynamic>;
-
-  using CArray_t = Eigen::Matrix<double, n + m, Eigen::Dynamic>;
-  using cArray_t = Eigen::Matrix<double, n + m, Eigen::Dynamic>;
-
   struct ApproximateCosts
   {
-    CArray_t Cs;
-    cArray_t cs;
+    std::vector<C_t> Cs;
+    std::vector<c_t> cs;
+    V_t V_final;
+    v_t v_final;
   };
 
   using DynamicsFunction = std::function<State_t(const State_t& x, const Control_t& u)>;
   using CostFunction = std::function<double(const State_t& x, const Control_t& u)>;
+  using FinalCostFunction = std::function<double(const State_t& x)>;
 
-  ILQRController(const DynamicsFunction& dynamics_function, const CostFunction& cost_function) noexcept;
+  ILQRController(const DynamicsFunction& dynamics_function, const CostFunction& cost_function, const FinalCostFunction& final_cost_function) noexcept;
 
-  [[nodiscard]] ControlArray_t solve(const State_t& x0, int timesteps) const;
+  [[nodiscard]] std::vector<Control_t> solve(const State_t& x0, int timesteps) const;
 
 private:
+  using LQR = LQRController<n, m>;
   DynamicsFunction dynamics_function_;
   CostFunction cost_function_;
-  LQRController<n, m> lqr_controller_;
+  FinalCostFunction final_cost_function_;
+  LQR lqr_controller_;
 
-  void forwardPropogate(StateArray_t& states, const ControlArray_t& controls) const;
+  void forwardPropogate(std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
 
-  FArray_t approximateDynamics(const StateArray_t& states, const ControlArray_t& controls) const;
-  ApproximateCosts approximateCost(const StateArray_t& states, const ControlArray_t& controls) const;
+  std::vector<typename LQR::Dynamics> approximateDynamics(const std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
+
+  void printState(const std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
+  void printState(const std::vector<State_t>& states, const std::vector<Control_t>& controls, const std::vector<Control_t> control_deltas) const;
+
+  std::pair<std::vector<typename LQR::Costs>, typename LQR::FinalCosts> approximateCost(const std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
 };
 }  // namespace controllers
 #include "ilqr.tpp"

@@ -41,27 +41,42 @@ public:
   {
     C_t C;
     c_t c;
+  };
+
+  struct FinalCosts
+  {
     V_t V_final;
     v_t v_final;
   };
 
-  LQRController() noexcept = default;
-  LQRController(const Dynamics& dynamics, const Costs& costs) noexcept;
+  struct LQRStepResult
+  {
+    K_t K;
+    k_t k;
+  };
+
+  LQRController() noexcept;
+  LQRController(const Dynamics& dynamics, const Costs& costs, const FinalCosts& final_costs) noexcept;
 
   [[nodiscard]] ControlArray_t solve(const State_t& x0, int timesteps) const;
+  [[nodiscard]] std::vector<LQRStepResult> solve(int timesteps, const std::vector<Dynamics>& dynamics,
+                                             const std::vector<Costs>& costs, const FinalCosts& final_costs) const;
   void setDynamics(const Dynamics& dynamics) noexcept;
   void setCosts(const Costs& dynamics) noexcept;
 
 private:
   Dynamics dynamics_;
   Costs costs_;
+  FinalCosts final_costs_;
 
-  [[nodiscard]] auto getxx(const Eigen::Matrix<double, n+m, n+m>& matrix) const;
-  [[nodiscard]] auto getxu(const Eigen::Matrix<double, n+m, n+m>& matrix) const;
-  [[nodiscard]] auto getuu(const Eigen::Matrix<double, n+m, n+m>& matrix) const;
+  static LQRStepResult lqrStep(V_t& V, v_t& v, const Costs& costs, const Dynamics& dynamics);
 
-  [[nodiscard]] auto getx(const Eigen::Matrix<double, n+m, 1>& matrix) const;
-  [[nodiscard]] auto getu(const Eigen::Matrix<double, n+m, 1>& matrix) const;
+  [[nodiscard]] static auto getxx(const Eigen::Matrix<double, n + m, n + m>& matrix);
+  [[nodiscard]] static auto getxu(const Eigen::Matrix<double, n + m, n + m>& matrix);
+  [[nodiscard]] static auto getuu(const Eigen::Matrix<double, n + m, n + m>& matrix);
+
+  [[nodiscard]] static auto getx(const Eigen::Matrix<double, n + m, 1>& matrix);
+  [[nodiscard]] static auto getu(const Eigen::Matrix<double, n + m, 1>& matrix);
 };
 }  // namespace controllers
 #include "lqr.tpp"

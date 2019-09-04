@@ -3,8 +3,8 @@
 #include <iomanip>
 #include <iostream>
 
-#include <lqr/lqr.h>
 #include <kinematics/rk4.h>
+#include <lqr/lqr.h>
 
 constexpr double delta_t = 1e-2;
 constexpr double g = 9.80665;
@@ -44,8 +44,9 @@ void test()
   // clang-format on
 
   LQRController::Dynamics dynamics{ F, f };
-  LQRController::Costs costs{ C, c, V_final, v_final};
-  LQRController controller(dynamics, costs);
+  LQRController::Costs costs{ C, c };
+  LQRController::FinalCosts final_costs{ V_final, v_final };
+  LQRController controller(dynamics, costs, final_costs);
 
   {
     using kinematics::integrate;
@@ -63,19 +64,18 @@ void test()
     for (int i = 0; i < timesteps; i++)
     {
       double angle = x(0);
-      F <<  1.0,                         delta_t, 0.0,
-        g/l * cos(angle) * delta_t,  1.0,     delta_t;
+      F << 1.0, delta_t, 0.0, g / l * cos(angle) * delta_t, 1.0, delta_t;
 
-      f << 0.0, g/l * (sin(angle) - angle * cos(angle)) * delta_t;
-      dynamics = {F, f};
+      f << 0.0, g / l * (sin(angle) - angle * cos(angle)) * delta_t;
+      dynamics = { F, f };
       controller.setDynamics(dynamics);
 
       auto res = controller.solve(x, timesteps);
-      LQRController::Control_t u  = res.col(0);
-//      u(0) = std::clamp(u(0), -max_torque, max_torque);
+      LQRController::Control_t u = res.col(0);
+      //      u(0) = std::clamp(u(0), -max_torque, max_torque);
       x = integrate(x, u, calcDelta, delta_t);
-//      Eigen::Vector3d full{x(0), x(1), u(0)};
-//      x = F * full + f;
+      //      Eigen::Vector3d full{x(0), x(1), u(0)};
+      //      x = F * full + f;
       std::cout << u(0) << "," << x(0) << "," << x(1) << "\n";
       csv << u(0) << "," << x(0) << "," << x(1) << "\n";
     }

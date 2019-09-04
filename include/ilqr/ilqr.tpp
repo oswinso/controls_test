@@ -2,59 +2,87 @@
 #ifndef CONTROLS_TEST_ILQR_TPP
 #define CONTROLS_TEST_ILQR_TPP
 
+#include <iostream>
+#include <numerics/approximation.h>
 #include <Eigen/Dense>
 #include "ilqr.h"
 
 namespace controllers
 {
 template <int n, int m>
-ILQRController<n, m>::ILQRController(const ILQRController::DynamicsFunction &dynamics_function,
-                                     const ILQRController::CostFunction &cost_function) noexcept
-  : dynamics_function_{ dynamics_function }, cost_function_{ cost_function }, lqr_controller_{}
+ILQRController<n, m>::ILQRController(const DynamicsFunction &dynamics_function, const CostFunction &cost_function,
+                                     const FinalCostFunction &final_cost_function) noexcept
+  : dynamics_function_{ dynamics_function }
+  , cost_function_{ cost_function }
+  , final_cost_function_{ final_cost_function }
 {
 }
+
 template <int n, int m>
-typename ILQRController<n, m>::ControlArray_t ILQRController<n, m>::solve(const ILQRController::State_t &x0,
-                                                                          int timesteps) const
+std::vector<typename ILQRController<n, m>::Control_t> ILQRController<n, m>::solve(const ILQRController::State_t &x0,
+                                                                                  int timesteps) const
 {
-  constexpr double error = 1e-1;
-  constexpr int iterations = 100;
+  //  constexpr double error = 1e-1;
+  constexpr int iterations = 20;
 
   const int num_controls = timesteps - 1;
 
-  ControlArray_t controls(m, num_controls);
-  StateArray_t states(n, timesteps);
-  states.col(0) = x0;
+  Control_t one;
+  one << -10.0;
+  std::vector<Control_t> controls(num_controls, one);
+  std::vector<State_t> states(timesteps, x0);
 
   forwardPropogate(states, controls);
 
+  //  double cost = std::numeric_limits<double>::infinity();
+
+  std::cout << "begin:\n";
+  printState(states, controls);
+
   for (int i = 0; i < iterations; i++)
   {
-    F_t F = approximateDynamics(states, controls);
+    std::vector<typename LQR::Dynamics> dynamics = approximateDynamics(states, controls);
+    auto [costs, final_cost] = approximateCost(states, controls);
+
+    State_t x_t = states.front();
+    auto step_results = lqr_controller_.solve(timesteps, dynamics, costs, final_cost);
+
+    std::cout << "i:"<<i<<"\n";
+    for (int j = 0; j < num_controls; j++)
+    {
+      auto delta_u = step_results[j].K * (x_t - states[j]) + step_results[j].k;
+      controls[j] += delta_u;
+      std::cout << "K:" << step_results[j].K << "\n, x_t - states[j]: " << (x_t - states[j]).transpose() << ", k: " << step_results[j].k << ", delta_u: " << delta_u << "\n";
+      x_t = dynamics_function_(x_t, controls[j]);
+    }
+    std::cout << "\n";
+    forwardPropogate(states, controls);
+    printState(states, controls);
   }
 
   return controls;
 }
 
 template <int n, int m>
-void ILQRController<n, m>::forwardPropogate(ILQRController::StateArray_t &states,
-                                            const ILQRController::ControlArray_t &controls) const
+void ILQRController<n, m>::forwardPropogate(std::vector<State_t> &states, const std::vector<Control_t> &controls) const
 {
-  int num_controls = controls.cols();
+  int num_controls = controls.size();
   for (int i = 0; i < num_controls; i++)
   {
-    auto previous_state = states.col(i);
-    auto control = controls.col(i);
-    states.col(i + 1) = dynamics_function_(previous_state, control);
+    auto previous_state = states[i];
+    auto control = controls[i];
+    states[i + 1] = dynamics_function_(previous_state, control);
   }
 }
-template <int n, int m>
-typename ILQRController<n, m>::FArray_t ILQRController<n, m>::approximateDynamics(
-    const ILQRController::StateArray_t &states, const ILQRController::ControlArray_t &controls) const
-{
-  const int num_controls = controls.cols();
 
-  FArray_t F_array(n, (n + m) * num_controls);
+template <int n, int m>
+std::vector<typename LQRController<n, m>::Dynamics> ILQRController<n, m>::approximateDynamics(
+  const std::vector<State_t> &states, const std::vector<Control_t> &controls) const
+{
+  const int num_controls = controls.size();
+
+  std::vector<typename LQR::Dynamics> F_array;
+  F_array.reserve(num_controls);
 
   auto wrapped = [=](const Full_t &full) {
     State_t x = full.head(n);
@@ -66,98 +94,86 @@ typename ILQRController<n, m>::FArray_t ILQRController<n, m>::approximateDynamic
 
   for (int t = 0; t < num_controls; t++)
   {
-    auto F = F_array.template block<n, n + m>(0, (n + m) * t);
-    Full_t delta = Full_t::Zero();
-
     Full_t x{};
-    x.head(n) = states.col(t);
-    x.tail(m) = controls.col(t);
+    x.head(n) = states[t];
+    x.tail(m) = controls[t];
 
-    for (int i = 0; i < n + m; i++)
-    {
-      delta(i) = epsilon;
-      State_t positive = wrapped(x + delta);
-      State_t negative = wrapped(x - delta);
-      F.col(i) = (positive - negative) / 2 * epsilon;
-      delta(i) = 0.0;
-    }
+    typename LQR::Dynamics dynamics;
+    dynamics.F = numerics::linearize<n>(wrapped, x, epsilon);
+    dynamics.f = LQR::f_t::Zero();
+    F_array.emplace_back(dynamics);
   }
 
   return F_array;
 }
+
 template <int n, int m>
-typename ILQRController<n, m>::ApproximateCosts ILQRController<n, m>::approximateCost(
-    const ILQRController::StateArray_t &states, const ILQRController::ControlArray_t &controls) const
+std::pair<std::vector<typename LQRController<n, m>::Costs>, typename LQRController<n, m>::FinalCosts>
+ILQRController<n, m>::approximateCost(const std::vector<State_t> &states, const std::vector<Control_t> &controls) const
 {
-  int num_controls = controls.cols();
+  constexpr double epsilon = 1e-9;
 
-  CArray_t C_array(n + m, (n + m) * num_controls);
-  cArray_t c_array(n + m, num_controls);
+  int num_controls = controls.size();
 
-  auto wrapped = [=](const Full_t &full) {
+  std::vector<typename LQR::Costs> costs_vector(num_controls);
+
+  typename LQR::FinalCosts final_costs{
+    numerics::quadratize(final_cost_function_, states[num_controls], epsilon),
+    numerics::linearizeScalar(final_cost_function_, states[num_controls], epsilon).transpose()
+  };
+
+  auto wrapped = [=](const Full_t &full) -> double {
     State_t x = full.head(n);
     Control_t u = full.tail(m);
     return cost_function_(x, u);
   };
 
-  constexpr double epsilon = 1e-9;
-
   for (int t = 0; t < num_controls; t++)
   {
-    auto c = c_array.template block<n + m, 1>(0, t);
-    Full_t delta = Full_t::Zero();
-
     Full_t x{};
-    x.head(n) = states.col(t);
-    x.tail(m) = controls.col(t);
+    x.head(n) = states[t];
+    x.tail(m) = controls[t];
 
-    for (int i = 0; i < n + m; i++)
-    {
-      delta(i) = epsilon;
-      State_t positive = wrapped(x + delta);
-      State_t negative = wrapped(x - delta);
-      c(i) = (positive - negative) / 2 * epsilon;
-      delta(i) = 0.0;
-    }
+    costs_vector[t].c = numerics::linearizeScalar(wrapped, x, epsilon).transpose();
   }
 
   for (int t = 0; t < num_controls; t++)
   {
-    auto C = C_array.template block<n + m, n + m>(0, (n + m) * t);
-    Full_t d1 = Full_t::Zero();
-    Full_t d2 = Full_t::Zero();
-
     Full_t x{};
-    x.head(n) = states.col(t);
-    x.tail(m) = controls.col(t);
+    x.head(n) = states[t];
+    x.tail(m) = controls[t];
 
-    for (int i = 0; i < n + m; i++)
-    {
-      d1(i) = epsilon;
-
-      for (int j = 0; j < n + m; j++)
-      {
-        d2(j) = epsilon;
-
-        if (i == j)
-        {
-          C(i, j) = (-wrapped(x + 2 * d1) + 16 * wrapped(x + d1) - 30 * wrapped(x) + 16 * wrapped(x - d1) -
-                     wrapped(x - 2 * d1)) /
-                    (12 * epsilon * epsilon);
-        }
-        else
-        {
-          C(i, j) = (wrapped(x + d1 + d2) - wrapped(x + d1 - d2) - wrapped(x - d1 + d2) + wrapped(x - d1 - d2)) /
-                    (4 * epsilon * epsilon);
-        }
-
-        d2(j) = 0.0;
-      }
-      d1(i) = 0.0;
-    }
+    costs_vector[t].C = numerics::quadratize(wrapped, x, epsilon);
   }
 
-  return { C_array, c_array };
+  return std::make_pair(std::move(costs_vector), final_costs);
+}
+
+template<int n, int m>
+void ILQRController<n, m>::printState(const std::vector<State_t> &states, const std::vector<Control_t> &controls) const
+{
+  std::cout << ">>>> STATES:\n";
+  for (const auto& x : states)
+  {
+    std::cout << "(" << x.transpose() << ") ";
+  }
+  std::cout << "\n\n>>>> CONTROLS:\n";
+  for (const auto& u : controls)
+  {
+    std::cout << "(" << u.transpose() << ") ";
+  }
+  std::cout << "\n\n";
+}
+template<int n, int m>
+void ILQRController<n, m>::printState(const std::vector<State_t>& states, const std::vector<Control_t>& controls, const std::vector<Control_t> control_deltas) const
+{
+  printState(states, controls);
+  std::cout << ">>>> CONTROL DELTAS:\n";
+  for (const auto& u : control_deltas)
+  {
+    std::cout << "(" << u.transpose() << ") ";
+  }
+  std::cout << "\n\n";
 }
 
 }  // namespace controllers
