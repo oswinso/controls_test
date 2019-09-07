@@ -23,7 +23,7 @@ template <int n, int m>
 std::vector<typename DDPController<n, m>::Control_t> DDPController<n, m>::solve(const DDPController::State_t &x0,
                                                                                 int timesteps, int iterations)
 {
-  constexpr double convergence_threshold = 1e-15;
+  constexpr double convergence_threshold = 1e-3;
 
   const int num_controls = timesteps - 1;
   std::vector<Control_t> controls(num_controls, Control_t::Zero());
@@ -70,6 +70,10 @@ std::vector<typename DDPController<n, m>::Control_t> DDPController<n, m>::solve(
       bool iteration_converged = z > 0;
       bool solve_converged = i > 0 && abs(d_cost / cost) < convergence_threshold;
 
+      if (solve_converged)
+      {
+        return new_controls;
+      }
       if (iteration_converged)
       {
         std::cout << "Iteration " << i << " converged!\n";
@@ -80,11 +84,6 @@ std::vector<typename DDPController<n, m>::Control_t> DDPController<n, m>::solve(
         cost = new_cost;
         forward_pass_done = true;
         break;
-      }
-
-      if (solve_converged)
-      {
-        return new_controls;
       }
       std::cout << "Iteration " << i << " did not converge.\n";
       printf("%10s\t%10s\t%10s\t%10s\t%10s\n", "d_cost:", "old_cost:", "new_cost:", "expected_cost:", "z:");
@@ -268,6 +267,21 @@ DDPController<n, m>::backwardsStep(DDPController::V_t &V, DDPController::v_t &v,
 {
   Q_t Q = costs.C + dynamics.F.transpose() * V * dynamics.F;
   q_t q = costs.c + dynamics.F.transpose() * v;
+
+//  std::cout << "\n ========== \n";
+//  std::cout << "Q    :\n" << Q << "\n";
+//  std::cout << "v: " << v.transpose() << "\n";
+
+  // Add on hessian parts
+  Q_t hessian_part = Q_t::Zero();
+  for (int i = 0; i < n; i++)
+  {
+//    std::cout << "F_hessian[" << i << "]:\n" << dynamics.F_hessian[i] << "\n";
+    hessian_part += v(i) * dynamics.F_hessian[i];
+  }
+  Q += hessian_part;
+//  std::cout << "v F_h:\n" << hessian_part << "\n";
+//  std::cout << "Q_res:\n" << Q << "\n";
 
   Eigen::Ref<Quu_t> Quu = Q.template block<m, m>(n, n);
   Quu_t Quu_inverse = getRegularizedInverse(Quu);
