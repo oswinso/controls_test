@@ -19,7 +19,7 @@ SCREEN_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 
 
 class Pendulum(pygame.sprite.Sprite):
-    def __init__(self, pivot_vect, length, bob_radius, data):
+    def __init__(self, pivot_vect, length, bob_radius, data, interpolation_steps):
         pygame.sprite.Sprite.__init__(self)
 
         self.font = pygame.font.SysFont("Ubuntu", 24)
@@ -27,7 +27,9 @@ class Pendulum(pygame.sprite.Sprite):
         self.length = length
         self.bob_radius = bob_radius
         self.index = 0
+        self.interpolation_index = 0
         self.data = data
+        self.interpolation_steps = interpolation_steps
 
         swinglen = length + bob_radius
 
@@ -60,12 +62,25 @@ class Pendulum(pygame.sprite.Sprite):
     def _normalize(angle):
         return ((angle + pi) % (2 * pi)) - pi
 
+    def _raw_angle(self):
+        if self.index == len(self.data) - 1:
+            return self.data[self.index][1]
+        else:
+            interpolation_amount = self.interpolation_index / self.interpolation_steps
+            current_pt = self.data[self.index][1]
+            next_pt = self.data[self.index + 1][1]
+            return (1 - interpolation_amount) * current_pt + interpolation_amount * next_pt
+
     def _angle(self):
-        return self._normalize(self.data[self.index][1] + pi)
+        return self._normalize(self._raw_angle() + pi)
 
     def update(self):
         # coords relative to pivot
-        self.index = (self.index + 1) % len(self.data)
+        self.interpolation_index += 1
+        if self.interpolation_index == self.interpolation_steps:
+            self.interpolation_index = 0
+            self.index = (self.index + 1) % len(self.data)
+
         angle = self._angle()
         length = self.length
 
@@ -95,7 +110,7 @@ def main():
     background.fill(COLOR['black'])
     clock = pygame.time.Clock()
 
-    pendulum = Pendulum(pivot_vect=SCREEN_CENTER, length=300, bob_radius=25, data=data)
+    pendulum = Pendulum(pivot_vect=SCREEN_CENTER, length=300, bob_radius=25, data=data, interpolation_steps=10)
     group = pygame.sprite.RenderPlain((pendulum,))
 
     while True:

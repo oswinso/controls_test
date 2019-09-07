@@ -1,9 +1,9 @@
 #ifndef CONTROLS_TEST_ILQR_H
 #define CONTROLS_TEST_ILQR_H
 
-#include <functional>
 #include <lqr/lqr.h>
 #include <Eigen/Core>
+#include <functional>
 
 namespace controllers
 {
@@ -17,6 +17,8 @@ public:
   using c_t = Eigen::Matrix<double, n + m, 1>;
 
   using Q_t = Eigen::Matrix<double, n + m, n + m>;
+  using Quu_t = Eigen::Matrix<double, m, m>;
+  using Qux_t = Eigen::Matrix<double, m, n>;
   using q_t = Eigen::Matrix<double, n + m, 1>;
 
   using V_t = Eigen::Matrix<double, n, n>;
@@ -41,25 +43,50 @@ public:
   using CostFunction = std::function<double(const State_t& x, const Control_t& u)>;
   using FinalCostFunction = std::function<double(const State_t& x)>;
 
-  ILQRController(const DynamicsFunction& dynamics_function, const CostFunction& cost_function, const FinalCostFunction& final_cost_function) noexcept;
+  using LQR = LQRController<n, m>;
+  using Costs = typename LQR::Costs;
+  using Dynamics = typename LQR::Dynamics;
+  using FinalCosts = typename LQR::FinalCosts;
 
-  [[nodiscard]] std::vector<Control_t> solve(const State_t& x0, int timesteps) const;
+  using LQRStepResult = typename LQR::LQRStepResult;
+  using StepResult = std::optional<typename LQR::LQRStepResult>;
+
+  ILQRController(const DynamicsFunction& dynamics_function, const CostFunction& cost_function,
+                 const FinalCostFunction& final_cost_function) noexcept;
+
+  [[nodiscard]] std::vector<Control_t> solve(const State_t& x0, int timesteps);
 
 private:
-  using LQR = LQRController<n, m>;
   DynamicsFunction dynamics_function_;
   CostFunction cost_function_;
   FinalCostFunction final_cost_function_;
   LQR lqr_controller_;
 
-  void forwardPropogate(std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
+  double mu = 1.0;
+  double mu_min = 1e-6;
+  double delta_zero = 2;
+  double delta = 1.0;
 
-  std::vector<typename LQR::Dynamics> approximateDynamics(const std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
+  Eigen::Vector2d dV {0.0, 0.0};
+
+  double forwardPropogate(std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
+
+  std::vector<typename LQR::Dynamics> approximateDynamics(const std::vector<State_t>& states,
+                                                          const std::vector<Control_t>& controls) const;
 
   void printState(const std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
-  void printState(const std::vector<State_t>& states, const std::vector<Control_t>& controls, const std::vector<Control_t> control_deltas) const;
+  void printState(const std::vector<State_t>& states, const std::vector<Control_t>& controls,
+                  const std::vector<Control_t> control_deltas) const;
 
-  std::pair<std::vector<typename LQR::Costs>, typename LQR::FinalCosts> approximateCost(const std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
+  std::vector<LQRStepResult> backwardsPass(int timesteps, const std::vector<Dynamics>& dynamics,
+                                        const std::vector<Costs>& costs, const FinalCosts& final_costs);
+  StepResult backwardsStep(V_t& V, v_t& v, const Costs& costs, const Dynamics& dynamics);
+
+  void increaseMu();
+  void decreaseMu();
+
+  std::pair<std::vector<typename LQR::Costs>, typename LQR::FinalCosts>
+  approximateCost(const std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
 };
 }  // namespace controllers
 #include "ilqr.tpp"

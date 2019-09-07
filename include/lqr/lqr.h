@@ -70,13 +70,6 @@ private:
   FinalCosts final_costs_;
 
   static LQRStepResult lqrStep(V_t& V, v_t& v, const Costs& costs, const Dynamics& dynamics);
-
-  [[nodiscard]] static auto getxx(const Eigen::Matrix<double, n + m, n + m>& matrix);
-  [[nodiscard]] static auto getxu(const Eigen::Matrix<double, n + m, n + m>& matrix);
-  [[nodiscard]] static auto getuu(const Eigen::Matrix<double, n + m, n + m>& matrix);
-
-  [[nodiscard]] static auto getx(const Eigen::Matrix<double, n + m, 1>& matrix);
-  [[nodiscard]] static auto getu(const Eigen::Matrix<double, n + m, 1>& matrix);
 };
 }  // namespace controllers
 #include "lqr.tpp"

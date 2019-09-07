@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <Eigen/Dense>
+#include <cost_blocks/cost_blocks.h>
 #include "lqr.h"
 
 namespace controllers
@@ -81,40 +82,9 @@ LQRController<n, m>::solve(int timesteps, const std::vector<Dynamics> &dynamics,
   for (int i = num_controls - 1; i >= 0; i--)
   {
     step_results[i] = lqrStep(V, v, costs[i], dynamics[i]);
-    std::cout << "K: " << step_results[i].K << ", k: " << step_results[i].k << "\n";
   }
 
   return step_results;
-}
-
-template <int n, int m>
-auto LQRController<n, m>::getxx(const Eigen::Matrix<double, n + m, n + m> &matrix)
-{
-  return matrix.template block<n, n>(0, 0);
-}
-
-template <int n, int m>
-auto LQRController<n, m>::getxu(const Eigen::Matrix<double, n + m, n + m> &matrix)
-{
-  return matrix.template block<n, m>(0, n);
-}
-
-template <int n, int m>
-auto LQRController<n, m>::getuu(const Eigen::Matrix<double, n + m, n + m> &matrix)
-{
-  return matrix.template block<m, m>(n, n);
-}
-
-template <int n, int m>
-auto LQRController<n, m>::getx(const Eigen::Matrix<double, n + m, 1> &matrix)
-{
-  return matrix.template block<n, 1>(0, 0);
-}
-
-template <int n, int m>
-auto LQRController<n, m>::getu(const Eigen::Matrix<double, n + m, 1> &matrix)
-{
-  return matrix.template block<m, 1>(n, 0);
 }
 
 template <int n, int m>
@@ -123,16 +93,17 @@ typename LQRController<n, m>::LQRStepResult LQRController<n, m>::lqrStep(V_t &V,
                                                                          const LQRController::Dynamics &dynamics)
 {
   Q_t Q = costs.C + dynamics.F.transpose() * V * dynamics.F;
-  q_t q = costs.c + dynamics.F.transpose() * (V * dynamics.f + v);
+  q_t q = costs.c + dynamics.F.transpose() * v;
 
-  std::cout << "Quu: " << getuu(Q) << ", Qxu: " << getxu(Q).transpose() << ", qu: " << getu(q).transpose() << ", F: " << dynamics.F.transpose() << ", f: " << dynamics.f << "\n";
-  Eigen::Matrix<double, m, m> Quu_inverse = Eigen::Matrix<double, m, m>(getuu(Q)).inverse();
+  std::cout << "\nQuu: " << getuu<n, m>(Q) << ", Qxu<n, m>: " << getxu<n, m>(Q).transpose() << ", qu: " << getu<n, m>(q).transpose() << ", F:\n" << dynamics.F.transpose() << ", f: " << dynamics.f.transpose() << "\n";
+  std::cout << "c: " << costs.c.transpose() << ", V:\n" << V.transpose() << ", v: " << v.transpose() << "\n";
+  Eigen::Matrix<double, m, m> Quu_inverse = Eigen::Matrix<double, m, m>(getuu<n, m>(Q)).inverse();
 
-  K_t K = -Quu_inverse * getxu(Q).transpose();
-  k_t k = -Quu_inverse * getu(q);
+  K_t K = -Quu_inverse * getxu<n, m>(Q).transpose();
+  k_t k = -Quu_inverse * getu<n, m>(q);
 
-  V = getxx(Q) + 2 * getxu(Q) * K + K.transpose() * getuu(Q) * K;
-  v = getx(q) + getxu(Q) * k + K.transpose() * getu(q) + K.transpose() * getuu(Q) * k;
+  V = getxx<n, m>(Q) + getxu<n, m>(Q) * K;
+  v = getx<n, m>(q) + getxu<n, m>(Q) * k;
 
   return { K, k };
 }

@@ -30,7 +30,7 @@ template <int n, int m, typename Function>
     delta(i) = epsilon;
     Output_t positive = f(x + delta);
     Output_t negative = f(x - delta);
-    jacobian.col(i) = (positive - negative) / 2 * epsilon;
+    jacobian.col(i) = (positive - negative) / (2 * epsilon);
     delta(i) = 0.0;
   }
 
@@ -60,7 +60,7 @@ template <int m, typename Function>
     delta(i) = epsilon;
     double positive = f(x + delta);
     double negative = f(x - delta);
-    jacobian(i) = (positive - negative) / 2 * epsilon;
+    jacobian(i) = (positive - negative) / (2 * epsilon);
     delta(i) = 0.0;
   }
 
@@ -93,7 +93,7 @@ template <int n, typename Function>
     for (int j = 0; j < n; j++)
     {
       d2(j) = epsilon;
-      hessian(i, j) = (f(x + d1 + d2) - f(x+d1) -f(x+d2) + f(x)) / (epsilon * epsilon);
+      hessian(i, j) = (f(x + d1 + d2) - f(x+d1) - f(x+d2) + f(x)) / (epsilon * epsilon);
 //      if (i == j)
 //      {
 //        Input_t arg_1 = x + 2 * d1;
@@ -114,8 +114,9 @@ template <int n, typename Function>
     }
     d1(i) = 0.0;
   }
-
-  return hessian;
+Hessian_t symmetric_hessian = 0.5 * (hessian + hessian.transpose());
+//  std::cout << "Hessian:\n" << symmetric_hessian << "\n";
+  return symmetric_hessian;
 }
 
 }  // namespace numerics
