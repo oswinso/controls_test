@@ -5,6 +5,8 @@
 
 namespace numerics
 {
+template <int n>
+using HessianTensor = std::vector<Eigen::Matrix<double, n, n>>;
 /**
  * Linearizes a function f: Rm -> Rn
  * @tparam n dimension of the output of f
@@ -48,7 +50,7 @@ template <int n, int m, typename Function>
  */
 template <int m, typename Function>
 [[nodiscard]] Eigen::Matrix<double, 1, m> linearizeScalar(Function f, const Eigen::Matrix<double, m, 1>& x,
-                                                    double epsilon = 1e-9) {
+                                                          double epsilon = 1e-9) {
   using Input_t = Eigen::Matrix<double, m, 1>;
   using Jacobian_t = Eigen::Matrix<double, 1, m>;
 
@@ -93,30 +95,51 @@ template <int n, typename Function>
     for (int j = 0; j < n; j++)
     {
       d2(j) = epsilon;
-      hessian(i, j) = (f(x + d1 + d2) - f(x+d1) - f(x+d2) + f(x)) / (epsilon * epsilon);
-//      if (i == j)
-//      {
-//        Input_t arg_1 = x + 2 * d1;
-//        Input_t arg_2 = x + d1;
-//        Input_t arg_3 = x - d1;
-//        Input_t arg_4 = x - 2 * d1;
-//        hessian(i, j) = (-f(arg_1) + 16 * f(arg_2) - 30 * f(x) + 16 * f(arg_3) - f(arg_4)) / (12 * epsilon * epsilon);
-//      }
-//      else
-//      {
-//        Input_t arg_1 = x + d1 + d2;
-//        Input_t arg_2 = x + d1 - d2;
-//        Input_t arg_3 = x - d1 + d2;
-//        Input_t arg_4 = x - d1 - d1;
-//        hessian(i, j) = (f(arg_1) - f(arg_2) - f(arg_3) + f(arg_4)) / (4 * epsilon * epsilon);
-//      }
+      hessian(i, j) = (f(x + d1 + d2) - f(x + d1) - f(x + d2) + f(x)) / (epsilon * epsilon);
+      //      if (i == j)
+      //      {
+      //        Input_t arg_1 = x + 2 * d1;
+      //        Input_t arg_2 = x + d1;
+      //        Input_t arg_3 = x - d1;
+      //        Input_t arg_4 = x - 2 * d1;
+      //        hessian(i, j) = (-f(arg_1) + 16 * f(arg_2) - 30 * f(x) + 16 * f(arg_3) - f(arg_4)) / (12 * epsilon *
+      //        epsilon);
+      //      }
+      //      else
+      //      {
+      //        Input_t arg_1 = x + d1 + d2;
+      //        Input_t arg_2 = x + d1 - d2;
+      //        Input_t arg_3 = x - d1 + d2;
+      //        Input_t arg_4 = x - d1 - d1;
+      //        hessian(i, j) = (f(arg_1) - f(arg_2) - f(arg_3) + f(arg_4)) / (4 * epsilon * epsilon);
+      //      }
       d2(j) = 0.0;
     }
     d1(i) = 0.0;
   }
-Hessian_t symmetric_hessian = 0.5 * (hessian + hessian.transpose());
-//  std::cout << "Hessian:\n" << symmetric_hessian << "\n";
+  Hessian_t symmetric_hessian = 0.5 * (hessian + hessian.transpose());
+  //  std::cout << "Hessian:\n" << symmetric_hessian << "\n";
   return symmetric_hessian;
+}
+
+template <int n, typename Function>
+[[nodiscard]] HessianTensor<n> quadratizeVectorFunction(Function f, const Eigen::Matrix<double, n, 1>& x,
+                                                                   double epsilon = 1e-3) {
+  using Input_t = Eigen::Matrix<double, n, 1>;
+  using FunctionReturnType = typename std::invoke_result_t<Function, const Input_t&>;
+  constexpr int rows = FunctionReturnType::RowsAtCompileTime;
+
+  HessianTensor<n> hessian;
+  for (int i = 0; i < rows; i++)
+  {
+    auto single_element = [=](const Input_t& input) -> double {
+      return f(input)(i);
+    };
+
+    hessian.emplace_back(quadratize(single_element, x, epsilon));
+  }
+
+  return hessian;
 }
 
 }  // namespace numerics

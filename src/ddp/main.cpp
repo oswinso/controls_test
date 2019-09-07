@@ -1,7 +1,8 @@
 #include <fstream>
 
-#include <ilqr/ilqr.h>
+#include <ddp/ddp.h>
 #include <kinematics/rk4.h>
+#include <utils/utils.h>
 
 constexpr double delta_t = 1e-1;
 constexpr double g = 9.80665;
@@ -12,10 +13,12 @@ constexpr double max_torque = 100.0;
 
 int main(int, char**)
 {
-  using ILQRController = controllers::ILQRController<2, 1>;
+  constexpr int n = 2;
+  constexpr int m = 1;
+  using DDPController = controllers::DDPController<n, m>;
 
-  using State_t = ILQRController::State_t;
-  using Control_t = ILQRController::Control_t;
+  using State_t = DDPController::State_t;
+  using Control_t = DDPController::Control_t;
 
   auto calc_delta = [](const State_t& x,
                        const Control_t& u) -> State_t {
@@ -29,31 +32,38 @@ int main(int, char**)
   };
 
   auto cost = [](const State_t& x, const Control_t& u) -> double {
-//    return 1e1 * x(0) * x(0) + 1e-9 * (u(0) * u(0));
     constexpr double alpha = 0.5;
     constexpr double beta = 0.9;
-    double u_cost = alpha*alpha*(std::cosh(beta*u(0)/alpha)-1);
-//    double angle_diff = std::abs(std::atan2(std::sin(x(0)), std::cos(x(0))));
-//    double x_cost = 1e7 * angle_diff * angle_diff;
+    double u_cost = alpha * alpha * (std::cosh(beta * u(0) / alpha) - 1);
     double x_cost = 1e3 * x(0) * x(0);
-//    printf("u: %8e, cost: %8e\n", u(0), cost);
     return u_cost + x_cost;
   };
 
   auto final_cost = [](const State_t& x) -> double {
-//    std::cout << "x: " << x.transpose() << std::endl;
     return 1e4 * (x(0) * x(0)) + 1e2 * (x(1) * x(1));
   };
 
-  ILQRController controller(dynamics, cost, final_cost);
+  DDPController controller(dynamics, cost, final_cost);
+
 
   State_t x;
   x << 2.5, 0.0;
+  Eigen::Matrix<double, 1, 1> u{0.0};
+
+  auto wrapped = utils::createFullFunction<n, m>(dynamics);
+  auto full_state = utils::createFullState(x, u);
+  auto result = numerics::quadratizeVectorFunction(wrapped, full_state);
+
+  std::cout << "things:\n";
+  for (const auto& thing : result)
+  {
+    std::cout << "\n" << thing << "\n";
+  }
 
   auto controls = controller.solve(x, timesteps);
   std::cout << "\n\n>> DONE! <<\n\n";
   {
-    std::ofstream csv("ilqr.csv");
+    std::ofstream csv("ddp.csv");
     csv << "u,x0,x1\n";
 
     csv << "0," << x(0) << "," << x(1) << "\n";
