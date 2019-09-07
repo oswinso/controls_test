@@ -7,9 +7,10 @@
 constexpr double delta_t = 1e-1;
 constexpr double g = 9.80665;
 constexpr double l = 1.0;
-constexpr int timesteps = 50;
+constexpr int timesteps = 10;
 constexpr double friction_coeff = 0.0;
 constexpr double max_torque = 100.0;
+constexpr int iterations = 50;
 
 int main(int, char**)
 {
@@ -33,9 +34,9 @@ int main(int, char**)
 
   auto cost = [](const State_t& x, const Control_t& u) -> double {
     constexpr double alpha = 0.5;
-    constexpr double beta = 0.9;
+    constexpr double beta = 0.1;
     double u_cost = alpha * alpha * (std::cosh(beta * u(0) / alpha) - 1);
-    double x_cost = 1e3 * x(0) * x(0);
+    double x_cost = 0.0 * 1e3 * x(0) * x(0);
     return u_cost + x_cost;
   };
 
@@ -48,19 +49,8 @@ int main(int, char**)
 
   State_t x;
   x << 2.5, 0.0;
-  Eigen::Matrix<double, 1, 1> u{0.0};
 
-  auto wrapped = utils::createFullFunction<n, m>(dynamics);
-  auto full_state = utils::createFullState(x, u);
-  auto result = numerics::quadratizeVectorFunction(wrapped, full_state);
-
-  std::cout << "things:\n";
-  for (const auto& thing : result)
-  {
-    std::cout << "\n" << thing << "\n";
-  }
-
-  auto controls = controller.solve(x, timesteps);
+  auto controls = controller.solve(x, timesteps, iterations);
   std::cout << "\n\n>> DONE! <<\n\n";
   {
     std::ofstream csv("ddp.csv");

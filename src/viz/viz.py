@@ -69,10 +69,10 @@ class Pendulum(pygame.sprite.Sprite):
             p2 = self.data[self.index][1]
             p3 = self.data[self.index + 1][1]
             p4 = self.data[self.index + 2][1]
-        elif self.index >= len(self.data) - 2:
-            p1 = self.data[self.index - 2][1]
-            p2 = self.data[self.index - 1][1]
-            p3 = self.data[self.index][1]
+        elif self.index == len(self.data) - 2:
+            p1 = self.data[self.index - 1][1]
+            p2 = self.data[self.index][1]
+            p3 = self.data[-1][1]
             p4 = self.data[-1][1]
         else:
             p1 = self.data[self.index - 1][1]
@@ -90,7 +90,7 @@ class Pendulum(pygame.sprite.Sprite):
         self.interpolation_index += 1
         if self.interpolation_index == self.interpolation_steps:
             self.interpolation_index = 0
-            self.index = (self.index + 1) % len(self.data)
+            self.index = (self.index + 1) % (len(self.data) - 1)
 
         angle = self._angle()
         length = self.length

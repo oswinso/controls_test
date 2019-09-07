@@ -2,6 +2,7 @@
 #define CONTROLS_TEST_DDP_H
 
 #include <lqr/lqr.h>
+#include <numerics/approximation.h>
 #include <Eigen/Core>
 #include <functional>
 
@@ -31,37 +32,70 @@ public:
   using Control_t = Eigen::Matrix<double, m, 1>;
   using Full_t = Eigen::Matrix<double, n + m, 1>;
 
-  struct ApproximateCosts
-  {
-    std::vector<C_t> Cs;
-    std::vector<c_t> cs;
-    V_t V_final;
-    v_t v_final;
-  };
-
   using DynamicsFunction = std::function<State_t(const State_t& x, const Control_t& u)>;
   using CostFunction = std::function<double(const State_t& x, const Control_t& u)>;
   using FinalCostFunction = std::function<double(const State_t& x)>;
 
-  using LQR = LQRController<n, m>;
-  using Costs = typename LQR::Costs;
-  using Dynamics = typename LQR::Dynamics;
-  using FinalCosts = typename LQR::FinalCosts;
+  struct Dynamics
+  {
+    numerics::HessianTensor<n + m> F_hessian;
+    F_t F;
+  };
 
-  using LQRStepResult = typename LQR::LQRStepResult;
-  using StepResult = std::optional<typename LQR::LQRStepResult>;
+  struct Costs
+  {
+    C_t C;
+    c_t c;
+  };
+
+  struct FinalCosts
+  {
+    V_t V_final;
+    v_t v_final;
+  };
 
   DDPController(const DynamicsFunction& dynamics_function, const CostFunction& cost_function,
-                 const FinalCostFunction& final_cost_function) noexcept;
+                const FinalCostFunction& final_cost_function) noexcept;
 
-  [[nodiscard]] std::vector<Control_t> solve(const State_t& x0, int timesteps);
+  [[nodiscard]] std::vector<Control_t> solve(const State_t& x0, int timesteps, int iterations);
 
 private:
   DynamicsFunction dynamics_function_;
   CostFunction cost_function_;
   FinalCostFunction final_cost_function_;
+
+  double mu = 1.0;
+  double mu_min = 1e-6;
+  double delta_zero = 2;
+  double delta = 1.0;
+
+  struct StepResult
+  {
+    K_t K;
+    k_t k;
+  };
+
+  Eigen::Vector2d dV{ 0.0, 0.0 };
+
+  void increaseMu();
+  void decreaseMu();
+
+  double forwardPropogate(std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
+
+  std::vector<Dynamics> approximateDynamics(const std::vector<State_t>& states,
+                                            const std::vector<Control_t>& controls) const;
+
+  std::pair<std::vector<Costs>, FinalCosts> approximateCosts(const std::vector<State_t>& states,
+                                                             const std::vector<Control_t>& controls) const;
+
+  std::vector<StepResult> backwardsPass(int timesteps, const std::vector<Dynamics>& dynamics,
+                                        const std::vector<Costs>& costs, const FinalCosts& final_cost);
+  std::optional<StepResult> backwardsStep(V_t& V, v_t& v, const Costs& costs, const Dynamics& dynamics);
+  Quu_t getRegularizedInverse(const Eigen::Ref<Quu_t>& Quu) const;
+
+  void printState(const std::vector<State_t>& states, const std::vector<Control_t>& controls) const;
 };
 }  // namespace controllers
 #include "ddp.tpp"
 
-#endif  //CONTROLS_TEST_DDP_H
+#endif  // CONTROLS_TEST_DDP_H
