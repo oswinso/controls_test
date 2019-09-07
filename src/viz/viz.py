@@ -27,7 +27,7 @@ class Pendulum(pygame.sprite.Sprite):
         self.length = length
         self.bob_radius = bob_radius
         self.index = 0
-        self.interpolation_index = 0
+        self.interpolation_index = 0.0
         self.data = data
         self.interpolation_steps = interpolation_steps
 
@@ -63,13 +63,24 @@ class Pendulum(pygame.sprite.Sprite):
         return ((angle + pi) % (2 * pi)) - pi
 
     def _raw_angle(self):
-        if self.index == len(self.data) - 1:
-            return self.data[self.index][1]
+        p1, p2, p3, p4 = (0.0, 0.0, 0.0, 0.0)
+        if self.index <= 1:
+            p1 = self.data[0][1]
+            p2 = self.data[self.index][1]
+            p3 = self.data[self.index + 1][1]
+            p4 = self.data[self.index + 2][1]
+        elif self.index >= len(self.data) - 2:
+            p1 = self.data[self.index - 2][1]
+            p2 = self.data[self.index - 1][1]
+            p3 = self.data[self.index][1]
+            p4 = self.data[-1][1]
         else:
-            interpolation_amount = self.interpolation_index / self.interpolation_steps
-            current_pt = self.data[self.index][1]
-            next_pt = self.data[self.index + 1][1]
-            return (1 - interpolation_amount) * current_pt + interpolation_amount * next_pt
+            p1 = self.data[self.index - 1][1]
+            p2 = self.data[self.index][1]
+            p3 = self.data[self.index + 1][1]
+            p4 = self.data[self.index + 2][1]
+        t = self.interpolation_index / self.interpolation_steps
+        return p2 + 0.5 * t * (p3 - p1 + t * (2.0 * p1 - 5.0 * p2 + 4.0 * p3 - p4 + t * (3.0 * (p2 - p3) + p4 - p1)))
 
     def _angle(self):
         return self._normalize(self._raw_angle() + pi)
